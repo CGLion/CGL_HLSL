@@ -1,13 +1,30 @@
 /* 
- * CG-Lion Spherical Reflection HLSL shader written by Oded Erell (c)2020
+ * CG-Lion Spherical Reflection Fresnel HLSL shader written by Oded Erell (c)2020
  *
  * Description:
- * Outputs reflection from spherical environment map.
+ * Outputs a blend of flat color and Fresnel reflection from spherical environment map.
  * Parameters:
+ * diffuseColor: The material's Diffuse color
+ * ior: The material's refractive index
  * envMap: A spherical formatted evvironment map (latitude longitute)
+ * envScale: Environment scale (exposure)
+ * envGamma: A gamma value used to linearize the environment texture
  */
 
 // ---- Tweakables ---- :
+
+float4 diffuseColor : Color
+<
+	string UIName = "Diffuse Color";
+> = {0.0f, 0.0f, 0.0f, 1.0f};
+
+float ior
+<
+	string UIWidget = "slider";
+	float UIMin = 1.0f;
+	float UIMax = 5.0f;
+	string UIName = "IOR";
+> = 1.5f;
 
 texture envMap : EnvironmeMapMap
 <
@@ -15,6 +32,21 @@ texture envMap : EnvironmeMapMap
     string TextureType = "2D";
 >;
 
+float envScale
+<
+	string UIWidget = "slider";
+	float UIMin = 0.01f;
+	float UIMax = 100.0f;
+	string UIName = "Environment Color Scale";
+> = 1.0f;
+
+float envGamma
+<
+	string UIWidget = "slider";
+	float UIMin = 0.001f;
+	float UIMax = 5.0f;
+	string UIName = "Environment Gamma";
+> = 2.2f;
 
 sampler2D envMapSampler = sampler_state
 {
@@ -68,6 +100,21 @@ float2 sphericalSample(float3 viewVec)
 	return float2(u,v);
 }
 
+float fresnelReflection(float ior, float3 invec, float3 nrmvec)
+{
+	float a, b;
+	float c = abs( dot(invec, nrmvec) );
+	float g = ior * ior - 1.0f + c * c;
+	float fr = 1.0f;
+	if (g > 0) {
+		g = sqrt(g);
+		a = (g - c) / (g + c);
+		b = (c * (g + c) - 1.0f) / (c * (g - c) + 1.0f);
+		fr = 0.5f * a * a * (1.0f + b * b);
+	}
+	return fr;
+}
+
 v2p vShader (a2v In)
 {
 	v2p Out;
@@ -85,7 +132,11 @@ v2p vShader (a2v In)
 float4 pShader (v2p In) : COLOR
 {
 	float3 refVec = In.wsIncoming - (2 * (dot(In.wsIncoming,In.wsNormal))) * In.wsNormal;
-	return tex2D(envMapSampler, sphericalSample(refVec));
+	float4 specColor = tex2D(envMapSampler, sphericalSample(refVec));
+	specColor = pow(specColor,envGamma) * envScale;
+	float specFr = fresnelReflection(ior,In.wsIncoming,In.wsNormal);
+	float4 finalColor = ((1 - specFr) * diffuseColor) + ( specFr * specColor );
+	return finalColor;
 }
 
 
@@ -101,6 +152,6 @@ technique basic
 		ZWriteEnable = true;
 		CullMode = CW;
 		AlphaBlendEnable = false;
-		PixelShader = compile ps_2_0 pShader();
+		PixelShader = compile ps_3_0 pShader();
 	}
 }
