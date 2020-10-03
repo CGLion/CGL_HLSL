@@ -1,0 +1,46 @@
+/*
+Needed UE4 input params:
+ColorIn - SceneTexture:PostProcessInput0
+Size - Distortion size
+Factor - Distortion factor
+Variables read from the wrapping UE4 HLSL shader:
+View
+Functions called from the wrapping UE4 HLSL shader:
+GetDefaultSceneTextureUV
+SceneTextureLookup
+*/
+// Constant pixel input index:
+static const int SceneTextureId = 14;
+static const float PI = 3.14159265f;
+static const float PI_2 = 1.5707963f;
+float2 CoordsGame = GetDefaultSceneTextureUV(Parameters, SceneTextureId);
+float2 CoordsFactor =  CoordsGame / Coords;
+float2 ViewSize = View.ViewSizeAndInvSize.xy;
+float2 TexelSize = View.ViewSizeAndInvSize.zw;
+// float2 ViewRatio = ViewSize / float2(1920.0f,1080.0f);
+float2 PixelRatio = float2(1.0f, ViewSize.y / ViewSize.x);
+float2 CenterViewPixel = 0.5f * ViewSize;
+float2 CenterViewCoords = float2(0.5f, 0.5f);
+float2 ViewPixel = Coords * ViewSize;
+float SizeViewPixel = Size * ViewSize.x;
+float2 CoordsToCenter = (Coords - CenterViewCoords) * PixelRatio;
+float2 CoordsGameToCenter = (CoordsGame - CenterViewCoords);
+float DistToCenter = length(CoordsToCenter);
+float ClampedProxToCenter = 1.0f - ( clamp(DistToCenter, 0.0f, Size) ) * ( 1.0f / Size );
+float Warp = sin(ClampedProxToCenter * PI_2) * Factor;
+float2 CoordsWarped = (( CoordsGameToCenter * (1.0f - Warp) ) + CenterViewCoords);
+// float2 CoordsWarped = ViewPixelWarped / ViewSize;
+// float3 WarpedPixel = SceneTextureLookup(CoordsWarped, SceneTextureId, 1).rgb;
+float3 WarpedPixel = float3(0.0f, 0.0f, 0.0f);
+float2 Offset = float2(0.0f, 0.0f);
+for (int i = -2; i < 3; i++)
+{
+	for (int j = -2; j < 3; j++)
+	{
+		Offset = float2(i,j) * TexelSize * Warp;
+		WarpedPixel += SceneTextureLookup(CoordsWarped + Offset, SceneTextureId, 1).rgb * 0.04;
+	}
+}
+float CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f) * 0.25f;
+float3 OutPixel = WarpedPixel + CircleMask;
+return OutPixel;
