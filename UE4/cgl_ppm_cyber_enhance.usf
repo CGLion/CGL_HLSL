@@ -13,6 +13,9 @@ SceneTextureLookup
 static const int SceneTextureId = 14;
 static const float PI = 3.14159265f;
 static const float PI_2 = 1.5707963f;
+static const float3x3 EdgeKernel = float3x3(-2.0f, -2.0f, -2.0f,
+											-2.0f, 16.0f, -2.0f,
+											-2.0f, -2.0f, -2.0f);
 float2 CoordsGame = GetDefaultSceneTextureUV(Parameters, SceneTextureId);
 float2 CoordsFactor =  CoordsGame / Coords;
 float2 ViewSize = View.ViewSizeAndInvSize.xy;
@@ -27,20 +30,34 @@ float2 CoordsToCenter = (Coords - CenterViewCoords) * PixelRatio;
 float2 CoordsGameToCenter = (CoordsGame - CenterViewCoords);
 float DistToCenter = length(CoordsToCenter);
 float ClampedProxToCenter = 1.0f - ( clamp(DistToCenter, 0.0f, Size) ) * ( 1.0f / Size );
-float Warp = sin(ClampedProxToCenter * PI_2) * Factor;
-float2 CoordsWarped = (( CoordsGameToCenter * (1.0f - Warp) ) + CenterViewCoords);
-// float2 CoordsWarped = ViewPixelWarped / ViewSize;
-// float3 WarpedPixel = SceneTextureLookup(CoordsWarped, SceneTextureId, 1).rgb;
+float WarpMask = sin(ClampedProxToCenter * PI_2) * Factor;
+float2 CoordsWarpMasked = (( CoordsGameToCenter * (1.0f - WarpMask) ) + CenterViewCoords);
+// float2 CoordsWarpMasked = ViewPixelWarpMasked / ViewSize;
+// float3 WarpedPixel = SceneTextureLookup(CoordsWarpMasked, SceneTextureId, 1).rgb;
+
+// Apply box-Blur to magnified areas:
 float3 WarpedPixel = float3(0.0f, 0.0f, 0.0f);
-float2 Offset = float2(0.0f, 0.0f);
+float2 BlurOffset = float2(0.0f, 0.0f);
 for (int i = -2; i < 3; i++)
 {
 	for (int j = -2; j < 3; j++)
 	{
-		Offset = float2(i,j) * TexelSize * Warp;
-		WarpedPixel += SceneTextureLookup(CoordsWarped + Offset, SceneTextureId, 1).rgb * 0.04;
+		BlurOffset = float2(i,j) * TexelSize * WarpMask;
+		WarpedPixel += SceneTextureLookup(CoordsWarpMasked + BlurOffset, SceneTextureId, 1).rgb * 0.04;
 	}
 }
+// Apply edge detect to magnified areas:
+float3 EdgePixel = float3(0.0f, 0.0f, 0.0f);
+float2 EdgeOffset = float2(0.0f, 0.0f);
+for (int i = -1; i < 2; i++)
+{
+	for (int j = -1; j < 2; j++)
+	{
+		EdgeOffset = float2(i,j) * TexelSize;
+		EdgePixel += SceneTextureLookup(CoordsWarpMasked + EdgeOffset, SceneTextureId, 1).rgb * EdgeKernel[i+1][j+1];
+	}
+}
+EdgePixel = clamp(EdgePixel,0.0f,1.0f) * float3(2.0f,0.0f,0.0f);
 float CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f) * 0.25f;
-float3 OutPixel = WarpedPixel + CircleMask;
+float3 OutPixel = (WarpedPixel * (1.0f - (WarpMask * 0.5f))) + (EdgePixel * WarpMask) + CircleMask;
 return OutPixel;
