@@ -13,10 +13,11 @@ SceneTextureLookup
 static const int SceneTextureId = 14;
 static const float PI = 3.14159265f;
 static const float PI_2 = 1.5707963f;
+static const float3 LumaWeights = float3(0.6f, 0.9f, 0.1f);
 static const float3x3 EdgeKernel = float3x3(-2.0f, -2.0f, -2.0f,
 											-2.0f, 16.0f, -2.0f,
 											-2.0f, -2.0f, -2.0f);
-float TimeMult = 0.1f + (Factor * 0.5f);
+float TimeMult = 0.05f + (Factor * 1.5f);
 float2 CoordsGame = GetDefaultSceneTextureUV(Parameters, SceneTextureId);
 float2 CoordsFactor =  CoordsGame / Coords;
 float2 ViewSize = View.ViewSizeAndInvSize.xy;
@@ -33,7 +34,7 @@ float DistToCenter = length(CoordsToCenter);
 float AngleFromCenter = (acos(dot(normalize(-CoordsToCenter),float2(1.0f, 0.0f))) / PI ) * (CoordsToCenter.y >= 0.0f ? 1.0f : -1.0) * 0.5f + 0.5f;
 float AngleFromCenterAnim = fmod(AngleFromCenter + (Time * TimeMult), 1.0f);
 float ClampedProxToCenter = 1.0f - ( clamp(DistToCenter, 0.0f, Size) ) * ( 1.0f / Size );
-float WarpMask = clamp(ClampedProxToCenter * (Factor * 2.0f), 0.0f, 1.0f);
+float WarpMask = sin(clamp(ClampedProxToCenter * (Factor * 2.0f), 0.0f, 1.0f) * PI_2);
 float2 CoordsWarped = (( CoordsGameToCenter * (1.0f - (WarpMask / (Magnification))) ) + CenterViewCoords);
 // float2 CoordsWarped = ViewPixelWarpMasked / ViewSize;
 // float3 WarpedPixel = SceneTextureLookup(CoordsWarped, SceneTextureId, 1).rgb;
@@ -59,10 +60,12 @@ for (int i = -1; i < 2; i++)
 		EdgePixel += SceneTextureLookup(CoordsWarped + EdgeOffset, SceneTextureId, 1).rgb * EdgeKernel[i+1][j+1];
 	}
 }
+bool IsAngle = (AngleFromCenterAnim > 0.0f && AngleFromCenterAnim < 0.1f) || (AngleFromCenterAnim > 0.5f && AngleFromCenterAnim < 0.6f);
 EdgePixel = clamp(EdgePixel,0.0f,1.0f) * float3(2.0f,0.0f,0.0f);
 float CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f &&
-					AngleFromCenterAnim > 0.5f &&
-					AngleFromCenterAnim < 1.0f)
+					IsAngle)
 					* 0.25f;
-float3 OutPixel = (WarpedPixel * (1.0f - (WarpMask * 0.5f))) + (EdgePixel * WarpMask) + CircleMask;
+float3 ColorMagnify = lerp(dot(WarpedPixel, LumaWeights),WarpedPixel * float3(0.125f,0.125f,0.25f), 0.75f);
+float3 ColorOut = lerp(WarpedPixel, ColorMagnify, WarpMask);
+float3 OutPixel = ColorOut + (EdgePixel * WarpMask) + CircleMask;
 return OutPixel;
