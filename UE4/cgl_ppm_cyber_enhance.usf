@@ -3,6 +3,7 @@ Needed UE4 input params:
 ColorIn - SceneTexture:PostProcessInput0
 Size - Distortion size
 Factor - Distortion factor
+Color - The color of the magnify effect graphics
 Variables read from the wrapping UE4 HLSL shader:
 View
 Functions called from the wrapping UE4 HLSL shader:
@@ -31,7 +32,8 @@ float SizeViewPixel = Size * ViewSize.x;
 float2 CoordsToCenter = (Coords - CenterViewCoords) * PixelRatio;
 float2 CoordsGameToCenter = (CoordsGame - CenterViewCoords);
 float DistToCenter = length(CoordsToCenter);
-float AngleFromCenter = (acos(dot(normalize(-CoordsToCenter),float2(1.0f, 0.0f))) / PI ) * (CoordsToCenter.y >= 0.0f ? 1.0f : -1.0) * 0.5f + 0.5f;
+float AngleFromCenter = (acos(dot(normalize(-CoordsToCenter),float2(1.0f, 0.0f))) / PI ) *
+						(CoordsToCenter.y >= 0.0f ? 1.0f : -1.0) * 0.5f + 0.5f;
 float AngleFromCenterAnim = fmod(AngleFromCenter + (Time * TimeMult), 1.0f);
 float ClampedProxToCenter = 1.0f - ( clamp(DistToCenter, 0.0f, Size) ) * ( 1.0f / Size );
 float WarpMask = sin(clamp(ClampedProxToCenter * (Factor * 2.0f), 0.0f, 1.0f) * PI_2);
@@ -61,10 +63,10 @@ for (int i = -1; i < 2; i++)
 	}
 }
 bool IsAngle = (AngleFromCenterAnim > 0.0f && AngleFromCenterAnim < 0.1f) || (AngleFromCenterAnim > 0.5f && AngleFromCenterAnim < 0.6f);
-EdgePixel = clamp(EdgePixel,0.0f,1.0f) * float3(2.0f,0.0f,0.0f);
-float CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f &&
+EdgePixel = clamp(EdgePixel,0.0f,1.0f) * (Color * 2.0f) * (fmod(CoordsGame.y + (Time * 0.01f), 0.005f) > 0.0025f);
+float3 CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f &&
 					IsAngle)
-					* 0.25f;
+					*( Color.xyz * 0.25f );
 float3 ColorMagnify = lerp(dot(WarpedPixel, LumaWeights),WarpedPixel * float3(0.125f,0.125f,0.25f), 0.75f);
 float3 ColorOut = lerp(WarpedPixel, ColorMagnify, WarpMask);
 float3 OutPixel = ColorOut + (EdgePixel * WarpMask) + CircleMask;
