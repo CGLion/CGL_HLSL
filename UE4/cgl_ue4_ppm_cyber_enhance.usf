@@ -1,14 +1,23 @@
 /*
-Needed UE4 input params:
-ColorIn - SceneTexture:PostProcessInput0
-Size - Distortion size
-Factor - Distortion factor
-Color - The color of the magnify effect graphics
+* CG-Lion Cyber Enhancement for Unreal Engine 4
+* written by Oded Erell (c)2020
+* cgl_ppm_cyber_enhance is an HLSL custom node for UE4
+* designed to be used within a Post Process Material
+* UE4 input params:
+* ColorIn: Input pixel color - SceneTexture:PostProcessInput0
+* Coords - UV coordinates of the image plane
+* Size - Distortion size as a 0.0 - 1.0 percent of the screen plane
+* Factor - Distortion factor 0.0 - 1.0 value used to control the magnification effect
+* Time - Game time input
+* Magnification - The amount of magnification at the main effect area
+* Color - The color of the magnify effect graphics
 Variables read from the wrapping UE4 HLSL shader:
 View
 Functions called from the wrapping UE4 HLSL shader:
 GetDefaultSceneTextureUV
 SceneTextureLookup
+* Notes:
+* The magnification only works correctly in full-screen view mode.
 */
 // Constant pixel input index:
 static const int SceneTextureId = 14;
@@ -23,7 +32,6 @@ float2 CoordsGame = GetDefaultSceneTextureUV(Parameters, SceneTextureId);
 float2 CoordsFactor =  CoordsGame / Coords;
 float2 ViewSize = View.ViewSizeAndInvSize.xy;
 float2 TexelSize = View.ViewSizeAndInvSize.zw;
-// float2 ViewRatio = ViewSize / float2(1920.0f,1080.0f);
 float2 PixelRatio = float2(1.0f, ViewSize.y / ViewSize.x);
 float2 CenterViewPixel = 0.5f * ViewSize;
 float2 CenterViewCoords = float2(0.5f, 0.5f);
@@ -37,9 +45,9 @@ float AngleFromCenter = (acos(dot(normalize(-CoordsToCenter),float2(1.0f, 0.0f))
 float AngleFromCenterAnim = fmod(AngleFromCenter + (Time * TimeMult), 1.0f);
 float ClampedProxToCenter = 1.0f - ( clamp(DistToCenter, 0.0f, Size) ) * ( 1.0f / Size );
 float WarpMask = sin(clamp(ClampedProxToCenter * (Factor * 2.0f), 0.0f, 1.0f) * PI_2);
-float2 CoordsWarped = (( CoordsGameToCenter * (1.0f - (WarpMask / (Magnification))) ) + CenterViewCoords);
-// float2 CoordsWarped = ViewPixelWarpMasked / ViewSize;
-// float3 WarpedPixel = SceneTextureLookup(CoordsWarped, SceneTextureId, 1).rgb;
+float2 CoordsWarped = lerp(	CoordsGame,
+							( CoordsGameToCenter * (1.0f / Magnification) ) + CenterViewCoords,
+							WarpMask);
 // Apply box-Blur to magnified areas:
 float3 WarpedPixel = float3(0.0f, 0.0f, 0.0f);
 float2 BlurOffset = float2(0.0f, 0.0f);
