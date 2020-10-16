@@ -1,25 +1,39 @@
 /*
-* CG-Lion Cyber Enhancement for Unreal Engine 4
+* CG-Lion Cyber-Enhancement shader for Unreal Engine 4
 * written by Oded Erell (c)2020
 * cgl_ppm_cyber_enhance is an HLSL custom node for UE4
 * designed to be used within a Post Process Material
-* UE4 input params:
-* ColorIn: Input pixel color - SceneTexture:PostProcessInput0
-* Coords - UV coordinates of the image plane
+* 
+* UE4 custom node input parameters:
+* 
+* Shading system inputs:
+* ColorIn: Input pixel color - UE4 SceneTexture node set to PostProcessInput0
+* Coords - UV coordinates of the image plane - UE4 TexCoords node set to cjannel 0
+* Time - Game time input - UE4 Time node
+* 
+* Custom shader inputs:
+* These parameters control the design and state of the effect,
+* And should be either defined as prameters to be set in a UE4 material instance,
+* or connected to paramers in a UE4 Parameter Collection for dynamic cotrol via C++ or Blueprint
 * Size - Distortion size as a 0.0 - 1.0 percent of the screen plane
 * Factor - Distortion factor 0.0 - 1.0 value used to control the magnification effect
-* Time - Game time input
 * Magnification - The amount of magnification at the main effect area
 * Color - The color of the magnify effect graphics
-Variables read from the wrapping UE4 HLSL shader:
-View
-Functions called from the wrapping UE4 HLSL shader:
-GetDefaultSceneTextureUV
-SceneTextureLookup
+* AnimSpeedMin - Rotation animation speed at Factor 0.0
+* AnimSpeedMax - Rotation animation speed at Factor 1.0
+* 
+* Variables read from the wrapping UE4 HLSL shader:
+* View
+* 
+* Functions called from the wrapping UE4 HLSL shader:
+* GetDefaultSceneTextureUV
+* SceneTextureLookup
+* 
 * Notes:
 * The magnification only works correctly in full-screen view mode.
 */
-// Constant pixel input index:
+
+// Constants:
 static const int SceneTextureId = 14;
 static const float PI = 3.14159265f;
 static const float PI_2 = 1.5707963f;
@@ -27,16 +41,19 @@ static const float3 LumaWeights = float3(0.6f, 0.9f, 0.1f);
 static const float3x3 EdgeKernel = float3x3(-2.0f, -2.0f, -2.0f,
 											-2.0f, 16.0f, -2.0f,
 											-2.0f, -2.0f, -2.0f);
-float TimeMult = 0.05f + (Factor * 1.5f);
+static const float2 CenterViewCoords = float2(0.5f, 0.5f);
+
+// Basic variables setup:
+float TimeMult = lerp(AnimSpeedMin, AnimSpeedMax, Factor);
 float2 CoordsGame = GetDefaultSceneTextureUV(Parameters, SceneTextureId);
 float2 CoordsFactor =  CoordsGame / Coords;
 float2 ViewSize = View.ViewSizeAndInvSize.xy;
 float2 TexelSize = View.ViewSizeAndInvSize.zw;
 float2 PixelRatio = float2(1.0f, ViewSize.y / ViewSize.x);
 float2 CenterViewPixel = 0.5f * ViewSize;
-float2 CenterViewCoords = float2(0.5f, 0.5f);
 float2 ViewPixel = Coords * ViewSize;
-float SizeViewPixel = Size * ViewSize.x;
+
+// Calculate pixel coordinates relative to view center:
 float2 CoordsToCenter = (Coords - CenterViewCoords) * PixelRatio;
 float2 CoordsGameToCenter = (CoordsGame - CenterViewCoords);
 float DistToCenter = length(CoordsToCenter);
@@ -45,9 +62,12 @@ float AngleFromCenter = (acos(dot(normalize(-CoordsToCenter),float2(1.0f, 0.0f))
 float AngleFromCenterAnim = fmod(AngleFromCenter + (Time * TimeMult), 1.0f);
 float ClampedProxToCenter = 1.0f - ( clamp(DistToCenter, 0.0f, Size) ) * ( 1.0f / Size );
 float WarpMask = sin(clamp(ClampedProxToCenter * (Factor * 2.0f), 0.0f, 1.0f) * PI_2);
+
+// Calculate warped image sample coordinates:
 float2 CoordsWarped = lerp(	CoordsGame,
 							( CoordsGameToCenter * (1.0f / Magnification) ) + CenterViewCoords,
 							WarpMask);
+
 // Apply box-Blur to magnified areas:
 float3 WarpedPixel = float3(0.0f, 0.0f, 0.0f);
 float2 BlurOffset = float2(0.0f, 0.0f);
@@ -59,6 +79,7 @@ for (int i = -2; i < 3; i++)
 		WarpedPixel += SceneTextureLookup(CoordsWarped + BlurOffset, SceneTextureId, 1).rgb * 0.04;
 	}
 }
+
 // Apply edge detect to magnified areas:
 float3 EdgePixel = float3(0.0f, 0.0f, 0.0f);
 float2 EdgeOffset = float2(0.0f, 0.0f);
@@ -70,12 +91,18 @@ for (int i = -1; i < 2; i++)
 		EdgePixel += SceneTextureLookup(CoordsWarped + EdgeOffset, SceneTextureId, 1).rgb * EdgeKernel[i+1][j+1];
 	}
 }
+
+// Generate the rotating arcs animation:
 bool IsAngle = (AngleFromCenterAnim > 0.0f && AngleFromCenterAnim < 0.1f) || (AngleFromCenterAnim > 0.5f && AngleFromCenterAnim < 0.6f);
 EdgePixel = clamp(EdgePixel,0.0f,1.0f) * (Color * 2.0f) * (fmod(CoordsGame.y + (Time * 0.01f), 0.005f) > 0.0025f);
 float3 CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f &&
 					IsAngle)
 					*( Color.xyz * 0.25f );
+
+// Compositing the final pixel value:
 float3 ColorMagnify = lerp(dot(WarpedPixel, LumaWeights),WarpedPixel * float3(0.125f,0.125f,0.25f), 0.75f);
 float3 ColorOut = lerp(WarpedPixel, ColorMagnify, WarpMask);
 float3 OutPixel = ColorOut + (EdgePixel * WarpMask) + CircleMask;
+
+// Returning the final output:
 return OutPixel;
