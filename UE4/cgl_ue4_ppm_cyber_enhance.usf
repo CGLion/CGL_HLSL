@@ -8,19 +8,21 @@
 * 
 * Shading system inputs:
 * ColorIn: Input pixel color - UE4 SceneTexture node set to PostProcessInput0
-* Coords - UV coordinates of the image plane - UE4 TexCoords node set to cjannel 0
-* Time - Game time input - UE4 Time node
+* Coords: UV coordinates of the image plane - UE4 TexCoords node set to cjannel 0
+* Time: Game time input - UE4 Time node
 * 
 * Custom shader inputs:
 * These parameters control the design and state of the effect,
 * And should be either defined as prameters to be set in a UE4 material instance,
 * or connected to paramers in a UE4 Parameter Collection for dynamic cotrol via C++ or Blueprint
-* Size - Distortion size as a 0.0 - 1.0 percent of the screen plane
-* Factor - Distortion factor 0.0 - 1.0 value used to control the magnification effect
-* Magnification - The amount of magnification at the main effect area
-* Color - The color of the magnify effect graphics
-* AnimSpeedMin - Rotation animation speed at Factor 0.0
-* AnimSpeedMax - Rotation animation speed at Factor 1.0
+* Size: Distortion size as a 0.0 - 1.0 percent of the screen plane
+* Factor: Distortion factor 0.0 - 1.0 value used to control the magnification effect
+* Magnification: The amount of magnification at the main effect area
+* ColorGraphics: The color of the magnify effect graphics
+* ColorMult: Color multiplier for the magnified area color - white is neutral
+* ColorDesat: The amount at which the magnified area color is desaturated - 0.0 - 1.0
+* AnimSpeedMin: Rotation animation speed at Factor 0.0
+* AnimSpeedMax: Rotation animation speed at Factor 1.0
 * 
 * Variables read from the wrapping UE4 HLSL shader:
 * View
@@ -46,12 +48,9 @@ static const float2 CenterViewCoords = float2(0.5f, 0.5f);
 // Basic variables setup:
 float TimeMult = lerp(AnimSpeedMin, AnimSpeedMax, Factor);
 float2 CoordsGame = GetDefaultSceneTextureUV(Parameters, SceneTextureId);
-float2 CoordsFactor =  CoordsGame / Coords;
 float2 ViewSize = View.ViewSizeAndInvSize.xy;
 float2 TexelSize = View.ViewSizeAndInvSize.zw;
 float2 PixelRatio = float2(1.0f, ViewSize.y / ViewSize.x);
-float2 CenterViewPixel = 0.5f * ViewSize;
-float2 ViewPixel = Coords * ViewSize;
 
 // Calculate pixel coordinates relative to view center:
 float2 CoordsToCenter = (Coords - CenterViewCoords) * PixelRatio;
@@ -94,13 +93,13 @@ for (int i = -1; i < 2; i++)
 
 // Generate the rotating arcs animation:
 bool IsAngle = (AngleFromCenterAnim > 0.0f && AngleFromCenterAnim < 0.1f) || (AngleFromCenterAnim > 0.5f && AngleFromCenterAnim < 0.6f);
-EdgePixel = clamp(EdgePixel,0.0f,1.0f) * (Color * 2.0f) * (fmod(CoordsGame.y + (Time * 0.01f), 0.005f) > 0.0025f);
+EdgePixel = clamp(EdgePixel,0.0f,1.0f) * (ColorGraphics * 2.0f) * (fmod(CoordsGame.y + (Time * 0.01f), 0.005f) > 0.0025f);
 float3 CircleMask = (DistToCenter > Size && DistToCenter < Size + 0.01f &&
 					IsAngle)
-					*( Color.xyz * 0.25f );
+					*( ColorGraphics.xyz * 0.25f );
 
 // Compositing the final pixel value:
-float3 ColorMagnify = lerp(dot(WarpedPixel, LumaWeights),WarpedPixel * float3(0.125f,0.125f,0.25f), 0.75f);
+float3 ColorMagnify = lerp(WarpedPixel * ColorMult, dot(WarpedPixel, LumaWeights), ColorDesat);
 float3 ColorOut = lerp(WarpedPixel, ColorMagnify, WarpMask);
 float3 OutPixel = ColorOut + (EdgePixel * WarpMask) + CircleMask;
 
