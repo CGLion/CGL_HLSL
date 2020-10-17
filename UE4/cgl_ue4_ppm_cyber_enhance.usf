@@ -15,8 +15,8 @@
 * These parameters control the design and state of the effect,
 * And should be either defined as prameters to be set in a UE4 material instance,
 * or connected to paramers in a UE4 Parameter Collection for dynamic cotrol via C++ or Blueprint
-* Size: Distortion size as a 0.0 - 1.0 percent of the screen plane
 * Factor: Distortion factor 0.0 - 1.0 value used to control the magnification effect
+* Size: Distortion size as a 0.0 - 1.0 percent of the screen plane
 * Magnification: The amount of magnification at the main effect area
 * ColorGraphics: The color of the magnify effect graphics
 * ColorMult: Color multiplier for the magnified area color - white is neutral
