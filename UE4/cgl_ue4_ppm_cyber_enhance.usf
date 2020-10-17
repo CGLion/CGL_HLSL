@@ -8,7 +8,7 @@
 * 
 * Shading system inputs:
 * ColorIn: Input pixel color - UE4 SceneTexture node set to PostProcessInput0
-* Coords: UV coordinates of the image plane - UE4 TexCoords node set to cjannel 0
+* Coords: UV coordinates of the image plane - UE4 TexCoords node set to channel 0
 * Time: Game time input - UE4 Time node
 * 
 * Custom shader inputs:
