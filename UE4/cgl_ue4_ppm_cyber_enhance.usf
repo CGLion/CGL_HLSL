@@ -1,8 +1,10 @@
 /*
 * CG-Lion Cyber-Enhancement shader for Unreal Engine 4
-* written by Oded Erell (c)2020
+* written by Oded Erell (c)2020 CG-Lion Studio
 * cgl_ppm_cyber_enhance is an HLSL custom node for UE4
 * designed to be used within a Post Process Material
+* More info:
+* https://cg-lion.com/2020/10/18/freebie-cyber-enhancement-shader-for-ue4/
 * 
 * UE4 custom node input parameters:
 * 
